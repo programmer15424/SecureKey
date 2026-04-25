@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   calcularFortaleza,
   generarContrasena,
   type OpcionesConjunto,
 } from './password.ts'
+import { HistorialOrm } from './historialOrm.ts'
 
 const estilos: Record<string, CSSProperties> = {
   contenedor: {
@@ -267,6 +268,7 @@ function SecureKey() {
   const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null)
   const [errorPortapapeles, setErrorPortapapeles] = useState<string | null>(null)
   const [copiadoOk, setCopiadoOk] = useState(false)
+  const historialOrm = useMemo(() => new HistorialOrm(window.localStorage), [])
 
   const opcionesConjunto: OpcionesConjunto = useMemo(
     () => ({
@@ -283,17 +285,28 @@ function SecureKey() {
     [contrasenaActual],
   )
 
-  const manejarGenerar = useCallback(() => {
+  useEffect(() => {
+    historialOrm
+      .listar()
+      .then((registros) =>
+        setHistorial(registros.map((registro) => registro.valor)),
+      )
+      .catch(() => setHistorial([]))
+  }, [historialOrm])
+
+  const manejarGenerar = useCallback(async () => {
     setErrorGeneracion(null)
     setCopiadoOk(false)
     try {
       const nueva = generarContrasena(longitud, opcionesConjunto)
+      await historialOrm.crear(nueva)
+      const registros = await historialOrm.listar()
       setContrasenaActual(nueva)
-      setHistorial((prev) => [nueva, ...prev].slice(0, 5))
+      setHistorial(registros.map((registro) => registro.valor))
     } catch (e) {
       setErrorGeneracion(e instanceof Error ? e.message : 'Error al generar.')
     }
-  }, [longitud, opcionesConjunto])
+  }, [historialOrm, longitud, opcionesConjunto])
 
   const manejarCopiar = useCallback(async () => {
     if (!contrasenaActual) return
